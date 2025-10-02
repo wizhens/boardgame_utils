@@ -1,4 +1,4 @@
-import { CSSProperties, useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
 
 type Dice3DProps = {
   value: 1 | 2 | 3 | 4 | 5 | 6;
