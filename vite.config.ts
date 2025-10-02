@@ -11,5 +11,6 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  base: "/boardgame_utils/dist/",
+  base: "/boardgame_utils/", // プロジェクトページ用のサブパス
+  build: { outDir: "docs" },
 });
