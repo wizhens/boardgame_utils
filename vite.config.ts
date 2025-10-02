@@ -11,5 +11,5 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  base: "/boardgame_utils/",
+  base: "/boardgame_utils/dist/",
 });
