@@ -2,6 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useGames, type Game } from "../hooks/useGames";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   Table,
   TableHeader,
   TableBody,
@@ -30,6 +39,12 @@ export default function GamesManager() {
   // 簡易フィルタ
   const [query, setQuery] = useState("");
   const [weightFilter, setWeightFilter] = useState<"" | Game["weight"]>("");
+
+  // JSONインポート用
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importError, setImportError] = useState<string | null>(null);
+  const [replaceAll, setReplaceAll] = useState(false);
 
   useEffect(() => {
     // ゲーム一覧が変わったら、存在しない id の編集状態は削除
@@ -171,6 +186,132 @@ export default function GamesManager() {
             <div className="text-sm text-gray-500">
               {filteredGames.length} 件
             </div>
+            <Dialog open={importOpen} onOpenChange={setImportOpen}>
+              <DialogTrigger asChild>
+                <Button variant="secondary" size="sm">
+                  JSONインポート
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>JSON文字列からインポート</DialogTitle>
+                  <DialogDescription>
+                    <span className="font-mono">
+                      [{"{"}"id","name","genre","weight"{"}"}]
+                    </span>{" "}
+                    形式の配列を貼り付けてください。idは省略可、weightは「軽量/中量/重量」。
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-col gap-2">
+                  <textarea
+                    className="min-h-40 h-40 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    placeholder='例: [{"name":"カタン","genre":"Euro","weight":"中量"}]'
+                    value={importText}
+                    onChange={(e) => {
+                      setImportText(e.target.value);
+                      setImportError(null);
+                    }}
+                  />
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={replaceAll}
+                      onChange={(e) => setReplaceAll(e.target.checked)}
+                    />
+                    既存データを全置換する
+                  </label>
+                  {importError && (
+                    <p className="text-sm text-red-500">{importError}</p>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setImportOpen(false);
+                      setImportText("");
+                      setImportError(null);
+                      setReplaceAll(false);
+                    }}
+                  >
+                    キャンセル
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      try {
+                        const data = JSON.parse(importText);
+                        if (!Array.isArray(data))
+                          throw new Error("配列ではありません");
+                        const parsed: Game[] = (data as unknown[])
+                          .map((g) => {
+                            const item = (g ?? {}) as Record<string, unknown>;
+                            const weightRaw = item.weight;
+                            const weight: Game["weight"] =
+                              typeof weightRaw === "string" &&
+                              (weightRaw === "軽量" ||
+                                weightRaw === "中量" ||
+                                weightRaw === "重量")
+                                ? (weightRaw as Game["weight"])
+                                : "軽量";
+                            return {
+                              id: String(
+                                (item.id as string | undefined) ??
+                                  crypto.randomUUID()
+                              ),
+                              name: String(
+                                (item.name as string | undefined) ?? ""
+                              ).trim(),
+                              genre: String(
+                                (item.genre as string | undefined) ?? ""
+                              ).trim(),
+                              weight,
+                            } as Game;
+                          })
+                          .filter((g) => g.name);
+                        if (parsed.length === 0)
+                          throw new Error("有効な項目がありません");
+
+                        if (replaceAll) {
+                          // 既存全置換: クリア後、一括追加
+                          clearAll();
+                          // addGameは重複名を防ぐロジックを持つため安全
+                          for (const g of parsed)
+                            addGame(g.name, g.genre, g.weight);
+                        } else {
+                          // 追記/更新: 名前一致は更新、なければ追加
+                          const nameToId = new Map(
+                            games.map((x) => [x.name, x.id] as const)
+                          );
+                          for (const g of parsed) {
+                            const existingId = nameToId.get(g.name);
+                            if (existingId) {
+                              updateGame(existingId, {
+                                name: g.name,
+                                genre: g.genre,
+                                weight: g.weight,
+                              });
+                            } else {
+                              addGame(g.name, g.genre, g.weight);
+                            }
+                          }
+                        }
+
+                        setImportOpen(false);
+                        setImportText("");
+                        setImportError(null);
+                        setReplaceAll(false);
+                      } catch (e: unknown) {
+                        const message =
+                          e instanceof Error ? e.message : "不正なJSONです";
+                        setImportError(message);
+                      }
+                    }}
+                  >
+                    取り込み
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             <Button variant="destructive" size="sm" onClick={() => clearAll()}>
               すべて削除
             </Button>
